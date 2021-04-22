@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"path": "..\\motion-controller-ti"
+		},
+		{
+			"path": "..\\..\\..\\..\\Downloads\\slvc575b\\BOOST-DRV8711 Hardware and Software Files\\Application\\BOOST-DRV8711_FIRMWAREv1.11"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "..\\DRV8711"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"uart.h": "c"
+		}
+	}
+}
