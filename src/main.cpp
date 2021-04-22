@@ -18,11 +18,13 @@ unsigned int ReadSPI(unsigned char readRegister, unsigned char dataLo);
 void getMotorDriverRegisters();
 void push1();
 void stop();
+void poll_serial();
 
 SPIClass mySPI(2); //SSI2 for tm4c123
 
 volatile bool go = false;
 volatile bool stop_motor = false;
+volatile char command;
 void setup()
 {
   pinMode(PUSH1, INPUT_PULLUP);
@@ -56,12 +58,14 @@ void setup()
   delay(50);
   Init();
   Serial.begin(9600);
-  
   getMotorDriverRegisters();
 }
 
+
 void loop()
 {
+  poll_serial();
+
   if(go)
   {
     digitalWrite(GREEN_LED, LOW); //not ready
@@ -70,6 +74,7 @@ void loop()
       digitalWrite(STEP, LOW); // step
       delayMicroseconds(uSec);
       digitalWrite(STEP, HIGH);// step
+      poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
       delayMicroseconds(20);
     }
     go = false;
@@ -95,6 +100,24 @@ void loop()
   */
 }
 
+void poll_serial()
+{
+  while(Serial.available())
+  {
+    command = Serial.read();
+    if(command != '\n' && command == 'g')
+    {
+      push1();
+      Serial.println("Aye");
+    }
+    else if(command == 's')
+    {
+      stop();
+      Serial.println("Stop");
+    }
+  }
+}
+
 void push1()
 {
   if(!go)
@@ -108,6 +131,19 @@ void stop()
 {
   WriteSPI_new(0x0D, 0x2C);
   digitalWrite(RED_LED, HIGH);
+}
+
+void rx_handler()
+{
+  while(Serial.available())
+  {
+    command = Serial.read();
+    if(command != '\n' && command == 'g')
+    {
+      go = true;
+      Serial.println("Aye");
+    }
+  }
 }
 
 void Init()

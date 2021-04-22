@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "..\\DRV8711"
+		},
+		{
+			"path": "..\\..\\..\\Qt\\KeyenceLaserRotary"
 		}
 	],
 	"settings": {
