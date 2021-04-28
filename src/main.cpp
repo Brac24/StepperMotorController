@@ -24,7 +24,15 @@ SPIClass mySPI(2); //SSI2 for tm4c123
 
 volatile bool go = false;
 volatile bool stop_motor = false;
-volatile char command;
+char currentChar;
+char command[3];
+volatile unsigned int moveDegrees = 0;
+int commandIndex = 0;
+//200 full steps for stepper motor
+//72:1 gear ratio
+//1/32 microstepping
+volatile unsigned int fullRev = 200*72*32;
+const unsigned int oneDegree = fullRev/360; // number of iterations needed to rotate 1 degree
 void setup()
 {
   pinMode(PUSH1, INPUT_PULLUP);
@@ -57,7 +65,7 @@ void setup()
   digitalWrite(CS, LOW);
   delay(50);
   Init();
-  Serial.begin(9600);
+  Serial.begin(115200);
   getMotorDriverRegisters();
 }
 
@@ -70,14 +78,15 @@ void loop()
   {
     digitalWrite(GREEN_LED, LOW); //not ready
     digitalWrite(PE_4, HIGH); // TURN ON BJT which is the open collector output 
-    for(int i=0; i<200*72*11; i++){ //Currently at 1/32 micro stepping. 16 would be 180 degree rotation
+    for(unsigned int i=0; i<moveDegrees; i++){ //Currently at 1/32 micro stepping. 16 would be 180 degree rotation
       digitalWrite(STEP, LOW); // step
       delayMicroseconds(uSec);
       digitalWrite(STEP, HIGH);// step
-      poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
-      delayMicroseconds(20);
+      //poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
+      delayMicroseconds(uSec);
     }
     go = false;
+    moveDegrees = 0;
     digitalWrite(RED_LED, LOW); //if the stop light is on turn it off
     digitalWrite(GREEN_LED, HIGH); //ready
     digitalWrite(PE_4, LOW);
@@ -104,18 +113,26 @@ void poll_serial()
 {
   while(Serial.available())
   {
-    command = Serial.read();
-    if(command != '\n' && command == 'g')
+    currentChar = Serial.read();
+    command[commandIndex] = currentChar;
+    commandIndex++;
+    //Serial.println(*command);
+    moveDegrees = oneDegree*atoi(command);
+    delayMicroseconds(1000);
+  }
+  commandIndex = 0;
+
+  if(moveDegrees > 0)
     {
+      memset(command, 0, sizeof command);
       push1();
       Serial.println("Aye");
     }
-    else if(command == 's')
+    else if(currentChar == 's')
     {
       stop();
       Serial.println("Stop");
     }
-  }
 }
 
 void push1()
@@ -123,6 +140,7 @@ void push1()
   if(!go)
   {
     go = true;
+    //moveDegrees = fullRev;
     WriteSPI_new(0x0D, 0x2D);
   }
 }
@@ -131,19 +149,6 @@ void stop()
 {
   WriteSPI_new(0x0D, 0x2C);
   digitalWrite(RED_LED, HIGH);
-}
-
-void rx_handler()
-{
-  while(Serial.available())
-  {
-    command = Serial.read();
-    if(command != '\n' && command == 'g')
-    {
-      go = true;
-      Serial.println("Aye");
-    }
-  }
 }
 
 void Init()
@@ -157,7 +162,7 @@ void Init()
   //TORQUE defaults
   unsigned char TORQUEHi, TORQUELo;
   TORQUEHi = 0x13;
-  TORQUELo = 0x50;//0x82;//0x1F;//0x41;
+  TORQUELo = 0x54;//0x82;//0x1F;//0x41;
   WriteSPI_new(TORQUEHi, TORQUELo);
 
   //OFF defaults
@@ -174,7 +179,7 @@ void Init()
 
   //DECAY defaults
   unsigned char DECAYHi, DECAYLo;
-  DECAYHi = 0x43;//0x45;//0x41;
+  DECAYHi = 0x45;//0x43;//0x41; //Use 0x45 (auto mixed decay) for ATI motor. Use 0x43 (mixed decay) for motor at home
   DECAYLo = 0x10;
   WriteSPI_new(DECAYHi, DECAYLo);
 
