@@ -3,14 +3,18 @@
 #include "HardwareSerial.h"
 #include <tm4c123gh6pm.h>
 
-#define CS PA_2
-#define STEP PA_6
-#define SLEEPn PE_5
-#define DIR PA_7
-#define RST PA_5
-#define STALL PB_2
-#define FAULT PE_0
-#define uSec 20
+// DRV8711 Pins
+constexpr uint8_t CS     = PA_2;
+constexpr uint8_t STEP   =  PA_6;
+constexpr uint8_t SLEEPn =  PE_5;
+constexpr uint8_t DIR    = PA_7;
+constexpr uint8_t RST    = PA_5;
+constexpr uint8_t STALL  = PB_2;
+constexpr uint8_t FAULT  = PE_0;
+
+//Half a period of the STEP signal.
+//Controls rotation speed of motor.
+constexpr uint8_t uSec   = 20;
 
 void Init();
 unsigned int WriteSPI_new(unsigned char dataHi, unsigned char dataLo);
