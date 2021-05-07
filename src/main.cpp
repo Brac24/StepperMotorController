@@ -5,8 +5,8 @@
 
 // DRV8711 Pins
 constexpr uint8_t CS     = PA_2;
-constexpr uint8_t STEP   =  PA_6;
-constexpr uint8_t SLEEPn =  PE_5;
+constexpr uint8_t STEP   = PA_6;
+constexpr uint8_t SLEEPn = PE_5;
 constexpr uint8_t DIR    = PA_7;
 constexpr uint8_t RST    = PA_5;
 constexpr uint8_t STALL  = PB_2;
@@ -14,10 +14,16 @@ constexpr uint8_t FAULT  = PE_0;
 
 //Half a period of the STEP signal.
 //Controls rotation speed of motor.
-constexpr uint8_t uSec   = 20;
+constexpr uint16_t uSec   = 18;
+
+//200 full steps for stepper motor
+//72:1 gear ratio
+//1/32 microstepping
+constexpr uint32_t fullRev = 200*72*32;
+constexpr uint32_t oneDegree = fullRev/360; // number of iterations needed to rotate 1 degree
 
 void Init();
-unsigned int WriteSPI_new(unsigned char dataHi, unsigned char dataLo);
+void WriteSPI_new(unsigned char dataHi, unsigned char dataLo);
 unsigned int ReadSPI(unsigned char readRegister, unsigned char dataLo);
 void getMotorDriverRegisters();
 void push1();
@@ -29,19 +35,21 @@ SPIClass mySPI(2); //SSI2 for tm4c123
 volatile bool go = false;
 volatile bool stop_motor = false;
 char currentChar;
-char command[3];
-volatile unsigned int moveDegrees = 0;
+char command[4];
+volatile int16_t moveDegrees = 0;
 int commandIndex = 0;
-//200 full steps for stepper motor
-//72:1 gear ratio
-//1/32 microstepping
-volatile unsigned int fullRev = 200*72*32;
-const unsigned int oneDegree = fullRev/360; // number of iterations needed to rotate 1 degree
+uint16_t potValue = 0;
+constexpr uint8_t maxTorque = 0x70; // 112 decimal
+constexpr uint8_t minTorque = 0x40; // 64
+uint8_t currentTorque = minTorque;
+uint8_t currentStall = 0;
 void setup()
 {
   pinMode(PUSH1, INPUT_PULLUP);
   pinMode(PUSH2, INPUT_PULLUP);
+  pinMode(PB_2, INPUT);
   pinMode(PE_4, OUTPUT);
+  pinMode(PB_4, OUTPUT);
   attachInterrupt(PUSH1, push1, RISING);
   attachInterrupt(PUSH2, stop, RISING);
   pinMode(RED_LED, OUTPUT);
@@ -54,15 +62,17 @@ void setup()
   pinMode(DIR, OUTPUT); //DIR signal
 
   pinMode(RST, OUTPUT); //RESET
-  pinMode(STALL, OUTPUT); //STALL
+  pinMode(STALL, INPUT_PULLUP); //STALL
   pinMode(FAULT, OUTPUT); //FAULT
+  attachInterrupt(STALL, stop, FALLING);
 
   pinMode(SLEEPn, OUTPUT); //SLEEP
-  digitalWrite(FAULT, HIGH); // fault input
+  //digitalWrite(FAULT, HIGH); // fault input
   digitalWrite(STALL, HIGH); // Stall input
   digitalWrite(SLEEPn, HIGH); //nSLEEP = high
-  digitalWrite(DIR, HIGH); //dir = high
+  digitalWrite(DIR, LOW); //dir = high
   digitalWrite(RST, LOW);  //reset = low
+  
   
   mySPI.begin();
   mySPI.setClockDivider(SPI_CLOCK_DIV2);
@@ -77,7 +87,14 @@ void setup()
 void loop()
 {
   poll_serial();
-
+  potValue = analogRead(PB_5);
+  //currentTorque = (potValue/84) + minTorque;
+  currentStall = (potValue/16) + 1;
+  WriteSPI_new(0x50, currentStall);
+  //Serial.println(currentStall);
+  //Serial.println(digitalRead(STALL));
+  //WriteSPI_new(0x13, currentTorque); //Set torque based on potentiometer
+  delay(1000);
   if(go)
   {
     digitalWrite(GREEN_LED, LOW); //not ready
@@ -88,6 +105,7 @@ void loop()
       digitalWrite(STEP, HIGH);// step
       //poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
       delayMicroseconds(uSec);
+      //getMotorDriverRegisters();
     }
     go = false;
     moveDegrees = 0;
@@ -120,7 +138,6 @@ void poll_serial()
     currentChar = Serial.read();
     command[commandIndex] = currentChar;
     commandIndex++;
-    //Serial.println(*command);
     moveDegrees = oneDegree*atoi(command);
     delayMicroseconds(1000);
   }
@@ -144,7 +161,10 @@ void push1()
   if(!go)
   {
     go = true;
-    //moveDegrees = fullRev;
+    if(moveDegrees == 0)
+    {
+      moveDegrees = oneDegree*20;
+    }
     WriteSPI_new(0x0D, 0x2D);
   }
 }
@@ -152,7 +172,11 @@ void push1()
 void stop()
 {
   WriteSPI_new(0x0D, 0x2C);
+  delay(10);
+  getMotorDriverRegisters();
   digitalWrite(RED_LED, HIGH);
+  //Serial.print("STALL: ");
+  //Serial.println(digitalRead(STALL));
 }
 
 void Init()
@@ -183,14 +207,14 @@ void Init()
 
   //DECAY defaults
   unsigned char DECAYHi, DECAYLo;
-  DECAYHi = 0x45;//0x43;//0x41; //Use 0x45 (auto mixed decay) for ATI motor. Use 0x43 (mixed decay) for motor at home
+  DECAYHi = 0x43;//0x43;//0x41; //Use 0x45 (auto mixed decay) for ATI motor. Use 0x43 (mixed decay) for motor at home
   DECAYLo = 0x10;
   WriteSPI_new(DECAYHi, DECAYLo);
 
   //STALL defaults
   unsigned char STALLHi, STALLLo;
-  STALLHi = 0x53;
-  STALLLo = 0x40;
+  STALLHi = 0x50;
+  STALLLo = 0x80; //0x40
   WriteSPI_new(STALLHi, STALLLo);
 
   //DRIVE defaults
@@ -206,17 +230,13 @@ void Init()
   WriteSPI_new(STATUSHi, STATUSLo);
 }
 
-unsigned int WriteSPI_new(unsigned char dataHi, unsigned char dataLo)
+void WriteSPI_new(unsigned char dataHi, unsigned char dataLo)
 {
-  
-  unsigned int readData = 0;
   digitalWrite(CS, HIGH);
   mySPI.transfer(dataHi);
   
   mySPI.transfer(dataLo);
   digitalWrite(CS, LOW);
-
-  return readData;
 }
 
 void getMotorDriverRegisters()
@@ -257,8 +277,8 @@ void getMotorDriverRegisters()
 
 unsigned int ReadSPI(unsigned char readRegister, unsigned char dataLo)
 {
-  
-  unsigned int result = WriteSPI_new(readRegister, 0x00);//0;
+  uint8_t result = 0;
+  WriteSPI_new(readRegister, 0x00);//0;
   digitalWrite(CS, HIGH);
   result = (mySPI.transfer(readRegister) << 8);
   result |= mySPI.transfer(0x00);
