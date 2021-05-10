@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include "HardwareSerial.h"
 #include <tm4c123gh6pm.h>
+#include <Rotary.hpp>
 
 // DRV8711 Pins
 constexpr uint8_t CS     = PA_2;
@@ -14,7 +15,7 @@ constexpr uint8_t FAULT  = PE_0;
 
 //Half a period of the STEP signal.
 //Controls rotation speed of motor.
-constexpr uint16_t uSec   = 18;
+constexpr uint16_t uSec   = 20;
 
 //200 full steps for stepper motor
 //72:1 gear ratio
@@ -31,18 +32,21 @@ void stop();
 void poll_serial();
 
 SPIClass mySPI(2); //SSI2 for tm4c123
+Rotary rotary = Rotary(mySPI);
 
 volatile bool go = false;
 volatile bool stop_motor = false;
 char currentChar;
-char command[4];
-volatile int16_t moveDegrees = 0;
+char command[5];
+bool negativeRotation = false;
+volatile int32_t moveDegrees = 0;
 int commandIndex = 0;
 uint16_t potValue = 0;
 constexpr uint8_t maxTorque = 0x70; // 112 decimal
 constexpr uint8_t minTorque = 0x40; // 64
 uint8_t currentTorque = minTorque;
 uint8_t currentStall = 0;
+
 void setup()
 {
   pinMode(PUSH1, INPUT_PULLUP);
@@ -78,7 +82,8 @@ void setup()
   mySPI.setClockDivider(SPI_CLOCK_DIV2);
   digitalWrite(CS, LOW);
   delay(50);
-  Init();
+  //Init();
+  rotary.Init();
   Serial.begin(115200);
   getMotorDriverRegisters();
 }
@@ -90,8 +95,8 @@ void loop()
   potValue = analogRead(PB_5);
   //currentTorque = (potValue/84) + minTorque;
   currentStall = (potValue/16) + 1;
-  WriteSPI_new(0x50, currentStall);
-  //Serial.println(currentStall);
+  WriteSPI_new(0x5F, currentStall);
+  Serial.println(currentStall);
   //Serial.println(digitalRead(STALL));
   //WriteSPI_new(0x13, currentTorque); //Set torque based on potentiometer
   delay(1000);
@@ -99,6 +104,7 @@ void loop()
   {
     digitalWrite(GREEN_LED, LOW); //not ready
     digitalWrite(PE_4, HIGH); // TURN ON BJT which is the open collector output 
+    /*
     for(unsigned int i=0; i<moveDegrees; i++){ //Currently at 1/32 micro stepping. 16 would be 180 degree rotation
       digitalWrite(STEP, LOW); // step
       delayMicroseconds(uSec);
@@ -106,7 +112,8 @@ void loop()
       //poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
       delayMicroseconds(uSec);
       //getMotorDriverRegisters();
-    }
+    }*/
+    rotary.rotate(moveDegrees);
     go = false;
     moveDegrees = 0;
     digitalWrite(RED_LED, LOW); //if the stop light is on turn it off
@@ -136,15 +143,30 @@ void poll_serial()
   while(Serial.available())
   {
     currentChar = Serial.read();
-    command[commandIndex] = currentChar;
-    commandIndex++;
-    moveDegrees = oneDegree*atoi(command);
+
+    // We will not convert the negative value here.
+    // Because atoi can only convert into positive values
+    // We will simply set a flag specifying value is negative
+    // and convert it later on in this function
+    if(currentChar == '-')
+    {
+      negativeRotation = true;
+    }
+    else
+    {
+      command[commandIndex] = currentChar;
+      commandIndex++;
+      moveDegrees = oneDegree*atoi(command);
+    }
+    
     delayMicroseconds(1000);
   }
   commandIndex = 0;
 
   if(moveDegrees > 0)
     {
+      moveDegrees = (negativeRotation) ? moveDegrees*-1 : moveDegrees; // convert value to negative if negative rotation
+      negativeRotation = false; // Default to a positive rotation direction
       memset(command, 0, sizeof command);
       push1();
       Serial.println("Aye");
