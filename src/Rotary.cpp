@@ -15,6 +15,7 @@ Rotary::Rotary(SPIClass spiController)
 
 void Rotary::rotate(int32_t moveDegrees)
 {
+  moveDegrees *= oneDegree;
   if(moveDegrees < 0)
   {
     digitalWrite(DIR1, HIGH); //dir = high
@@ -46,7 +47,7 @@ void Rotary::Init()
   //TORQUE defaults
   unsigned char TORQUEHi, TORQUELo;
   TORQUEHi = 0x10;
-  TORQUELo = 0x54;//0x82;//0x1F;//0x41;
+  TORQUELo = 0x50;//0x82;//0x1F;//0x41;
   WriteSPI_new(TORQUEHi, TORQUELo);
 
   //OFF defaults
@@ -63,7 +64,7 @@ void Rotary::Init()
 
   //DECAY defaults
   unsigned char DECAYHi, DECAYLo;
-  DECAYHi = 0x43;//0x43;//0x41; //Use 0x45 (auto mixed decay) for ATI motor. Use 0x43 (mixed decay) for motor at home
+  DECAYHi = 0x45;//0x43;//0x41; //Use 0x45 (auto mixed decay) for ATI motor. Use 0x43 (mixed decay) for motor at home
   DECAYLo = 0x10;
   WriteSPI_new(DECAYHi, DECAYLo);
 

@@ -14,7 +14,7 @@ constexpr uint8_t FAULT1  = PE_0;
 
 //Half a period of the STEP signal.
 //Controls rotation speed of motor.
-constexpr uint16_t uSec1   = 100;
+constexpr uint16_t uSec1   = 20;
 
 class Rotary
 {
@@ -31,6 +31,7 @@ class Rotary
         uint8_t uStep = 32;     // 1/32 micro-stepping
         uint32_t fullRev;
         uint32_t oneDegree;
+        int32_t position = 0;
         void WriteSPI_new(unsigned char dataHi, unsigned char dataLo); 
 
 };

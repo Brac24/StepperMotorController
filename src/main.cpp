@@ -156,7 +156,7 @@ void poll_serial()
     {
       command[commandIndex] = currentChar;
       commandIndex++;
-      moveDegrees = oneDegree*atoi(command);
+      moveDegrees = atoi(command);
     }
     
     delayMicroseconds(1000);
@@ -185,7 +185,7 @@ void push1()
     go = true;
     if(moveDegrees == 0)
     {
-      moveDegrees = oneDegree*20;
+      moveDegrees = 90;
     }
     WriteSPI_new(0x0D, 0x2D);
   }
