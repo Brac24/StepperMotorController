@@ -96,46 +96,23 @@ void loop()
   //currentTorque = (potValue/84) + minTorque;
   currentStall = (potValue/16) + 1;
   WriteSPI_new(0x5F, currentStall);
-  Serial.println(currentStall);
+  //Serial.println(currentStall);
   //Serial.println(digitalRead(STALL));
   //WriteSPI_new(0x13, currentTorque); //Set torque based on potentiometer
-  delay(1000);
+  //delay(1000);
   if(go)
   {
-    digitalWrite(GREEN_LED, LOW); //not ready
-    digitalWrite(PE_4, HIGH); // TURN ON BJT which is the open collector output 
-    /*
-    for(unsigned int i=0; i<moveDegrees; i++){ //Currently at 1/32 micro stepping. 16 would be 180 degree rotation
-      digitalWrite(STEP, LOW); // step
-      delayMicroseconds(uSec);
-      digitalWrite(STEP, HIGH);// step
-      //poll_serial(); //Ideally we don't want to be polling for a stop character in here. Can we make it an interrupt. Stop rotary when 's' character is received.
-      delayMicroseconds(uSec);
-      //getMotorDriverRegisters();
-    }*/
+    digitalWrite(GREEN_LED, LOW);  // not ready
+    digitalWrite(PE_4, HIGH);      // TURN ON BJT which is the open collector output 
+
     rotary.rotate(moveDegrees);
     go = false;
     moveDegrees = 0;
-    digitalWrite(RED_LED, LOW); //if the stop light is on turn it off
-    digitalWrite(GREEN_LED, HIGH); //ready
+    digitalWrite(RED_LED, LOW);    // if the stop light is on turn it off
+    digitalWrite(GREEN_LED, HIGH); // ready
     digitalWrite(PE_4, LOW);
 
   }
-  //WriteSPI_new(0x0C, 0x1D);
-  
-  //WriteSPI_new(0x0C, 0x04);
-  //delay(4000);
-  /*
-  WriteSPI_new(0x0C, 0x07); //reverse the direction to return back
-  for(int i=0; i<200*72; i++){
-      digitalWrite(STEP, LOW);
-      delayMicroseconds(uSec);
-      digitalWrite(STEP, HIGH);
-      delayMicroseconds(uSec);
-  }
-  WriteSPI_new(0x0C, 0x04);
-  delay(1000);
-  */
 }
 
 void poll_serial()
@@ -150,11 +127,11 @@ void poll_serial()
     // and convert it later on in this function
     if(currentChar == '-')
     {
-      negativeRotation = true;
+      negativeRotation = true; // Set flag specifying value is negative when we receive a '-' character
     }
     else
     {
-      command[commandIndex] = currentChar;
+      command[commandIndex] = currentChar; // I should use a char * instead of an array. That seems to be the standard
       commandIndex++;
       moveDegrees = atoi(command);
     }
@@ -187,15 +164,14 @@ void push1()
     {
       moveDegrees = 90;
     }
-    WriteSPI_new(0x0D, 0x2D);
+    WriteSPI_new(0x0D, 0x2D); // Enable motor
   }
 }
 
 void stop()
 {
-  WriteSPI_new(0x0D, 0x2C);
+  WriteSPI_new(0x0D, 0x2C); // Disable motor
   delay(10);
-  getMotorDriverRegisters();
   digitalWrite(RED_LED, HIGH);
   //Serial.print("STALL: ");
   //Serial.println(digitalRead(STALL));
